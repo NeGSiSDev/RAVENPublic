@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone Flight with Raven Observers</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        #controls {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            width: 300px;
+            overflow-y: auto;
+            transition: right 0.3s ease;
+        }
+        #controls.visible {
+            right: 0;
+        }
+        #toggleButton {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            width: 34px;
+            height: 34px;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            z-index: 1001;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            gap: 4px;
+        }
+        #toggleButton:hover {
+            background: #f4f4f4;
+        }
+        #toggleButton span {
+            width: 18px;
+            height: 2px;
+            background: #333;
+            display: block;
+            transition: all 0.3s ease;
+        }
+        #toggleButton.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        #toggleButton.active span:nth-child(2) {
+            opacity: 0;
+        }
+        #toggleButton.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+        #logo {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            z-index: 1001;
+        }
+        #logo img {
+            display: block;
+            height: 40px;
+            width: auto;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        .control-group {
+            margin-bottom: 12px;
+        }
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 4px;
+        }
+        .control-group input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .control-group input[type="range"] {
+            padding: 0;
+        }
+        .control-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        .checkbox-group {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-group label {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .value-display {
+            display: inline-block;
+            margin-left: 8px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:active {
+            background: #004085;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <button id="toggleButton" onclick="toggleMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    <div id="controls">
+        <h3>Flight Parameters</h3>
+        
+        <div class="control-group">
+            <label>Drone Speed (km/h): <span class="value-display" id="speedDisplay">140</span></label>
+            <input type="range" id="droneSpeed" min="20" max="200" value="140" step="10">
+        </div>
+        
+        <div class="control-group">
+            <label>Flight Distance (km): <span class="value-display" id="distanceDisplay">50</span></label>
+            <input type="range" id="flightDistance" min="10" max="100" value="50" step="5">
+        </div>
+        
+        <div class="control-group">
+            <label>Min Observer Distance (km): <span class="value-display" id="minDistDisplay">1</span></label>
+            <input type="range" id="minObserverDist" min="0.5" max="3" value="1" step="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Max Observer Distance (km): <span class="value-display" id="maxDistDisplay">5</span></label>
+            <input type="range" id="maxObserverDist" min="3" max="10" value="5" step="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Observer Spawn Rate (per km): <span class="value-display" id="spawnRateDisplay">10</span></label>
+            <input type="range" id="observerSpawnRate" min="1" max="100" value="10" step="1">
+        </div>
+        
+        <div class="control-group">
+            <label>Min Observer Visibility (km): <span class="value-display" id="minVisDisplay">1</span></label>
+            <input type="range" id="minVisibility" min="0.5" max="3" value="1" step="0.5">
+        </div>
+        
+        <div class="control-group">
+            <label>Max Observer Visibility (km): <span class="value-display" id="maxVisDisplay">5</span></label>
+            <input type="range" id="maxVisibility" min="1" max="5" value="5" step="0.5">
+        </div>
+        
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" id="aimRandomness" checked>
+                Enable Aim Randomness (±10°)
+            </label>
+        </div>
+        
+        <button onclick="restartFlight()">Restart Flight</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // Configuration parameters
+        let config = {
+            droneSpeed: 140, // km/h
+            flightDistance: 50, // km
+            minObserverDistance: 1, // km
+            maxObserverDistance: 5, // km
+            observerSpawnRate: 10, // observers per km
+            minVisibility: 1, // km
+            maxVisibility: 5, // km
+            aimRandomness: true // ±10 degrees
+        };
+
+        // Map initialization
+        const map = L.map('map', {
+            zoomControl: true,
+            attributionControl: true
+        }).setView([55.4767, 10.3309], 12); // Odense Airport, Denmark
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Drone marker
+        const droneIcon = L.circleMarker([0, 0], {
+            radius: 8,
+            fillColor: '#ff0000',
+            color: '#000000',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+        });
+
+        // Flight state
+        let flightState = {
+            drone: null,
+            observers: [],
+            lines: [],
+            animationId: null,
+            startTime: null,
+            startPos: null,
+            endPos: null,
+            lastSpawnDistance: 0
+        };
+
+        // Helper functions
+        function randomInRange(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        function getRandomPointAtDistance(center, distanceKm) {
+            const angle = Math.random() * 2 * Math.PI;
+            const latOffset = (distanceKm / 111) * Math.cos(angle);
+            const lngOffset = (distanceKm / (111 * Math.cos(center[0] * Math.PI / 180))) * Math.sin(angle);
+            return [center[0] + latOffset, center[1] + lngOffset];
+        }
+
+        function getPointInDirection(start, end, distanceKm, aimOffset = 0) {
+            // Calculate bearing from start to end
+            const lat1 = start[0] * Math.PI / 180;
+            const lat2 = end[0] * Math.PI / 180;
+            const dLon = (end[1] - start[1]) * Math.PI / 180;
+
+            const y = Math.sin(dLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) -
+                      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+            let bearing = Math.atan2(y, x);
+
+            // Apply the aim offset (set at spawn time)
+            bearing += aimOffset;
+
+            // Calculate point at fixed distance in that direction
+            const R = 6371; // Earth's radius in km
+            const d = distanceKm / R;
+
+            const lat3 = Math.asin(Math.sin(lat1) * Math.cos(d) +
+                                   Math.cos(lat1) * Math.sin(d) * Math.cos(bearing));
+            const lon3 = start[1] * Math.PI / 180 + 
+                         Math.atan2(Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
+                                   Math.cos(d) - Math.sin(lat1) * Math.sin(lat3));
+
+            return [lat3 * 180 / Math.PI, lon3 * 180 / Math.PI];
+        }
+
+        function getDistance(pos1, pos2) {
+            const R = 6371; // Earth's radius in km
+            const lat1 = pos1[0] * Math.PI / 180;
+            const lat2 = pos2[0] * Math.PI / 180;
+            const dLat = (pos2[0] - pos1[0]) * Math.PI / 180;
+            const dLon = (pos2[1] - pos1[1]) * Math.PI / 180;
+
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1) * Math.cos(lat2) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function createObserver(position, dronePos) {
+            const marker = L.circleMarker(position, {
+                radius: 6,
+                fillColor: '#00ff00',
+                color: '#000000',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8,
+                pane: 'markerPane'
+            }).addTo(map);
+
+            // Random fixed visibility range between min-max km
+            const visibilityRange = randomInRange(config.minVisibility, config.maxVisibility);
+            
+            // Calculate aim offset once at spawn (±10 degrees if randomness enabled)
+            const aimOffset = config.aimRandomness ? (Math.random() - 0.5) * 20 * (Math.PI / 180) : 0;
+            
+            const lineEndPoint = getPointInDirection(position, dronePos, visibilityRange, aimOffset);
+
+            const line = L.polyline([position, lineEndPoint], {
+                color: '#000000',
+                weight: 1.5,
+                opacity: 0.5,
+                dashArray: '5, 5',
+                pane: 'overlayPane'
+            }).addTo(map);
+
+            return { marker, line, position, visibilityRange, aimOffset };
+        }
+
+        function updateObservers(dronePos) {
+            // Remove observers whose fixed-length line can no longer reach the drone
+            flightState.observers = flightState.observers.filter(obs => {
+                const dist = getDistance(dronePos, obs.position);
+                
+                // If drone is farther than the observer's visibility range, remove it
+                if (dist > obs.visibilityRange) {
+                    map.removeLayer(obs.marker);
+                    map.removeLayer(obs.line);
+                    return false;
+                }
+                
+                // Update line endpoint to point toward drone at fixed visibility range with consistent offset
+                const lineEndPoint = getPointInDirection(obs.position, dronePos, obs.visibilityRange, obs.aimOffset);
+                obs.line.setLatLngs([obs.position, lineEndPoint]);
+                return true;
+            });
+
+            // Spawn new observers based on distance traveled
+            const totalDistance = getDistance(flightState.startPos, dronePos);
+            const distanceSinceLastSpawn = totalDistance - flightState.lastSpawnDistance;
+            
+            if (distanceSinceLastSpawn >= 1 / config.observerSpawnRate) {
+                const shouldSpawn = Math.random() < 0.7; // 70% chance to spawn
+                if (shouldSpawn) {
+                    const distance = randomInRange(config.minObserverDistance, config.maxObserverDistance);
+                    const obsPos = getRandomPointAtDistance(dronePos, distance);
+                    const observer = createObserver(obsPos, dronePos);
+                    flightState.observers.push(observer);
+                }
+                flightState.lastSpawnDistance = totalDistance;
+            }
+        }
+
+        function animateFlight(timestamp) {
+            if (!flightState.startTime) {
+                flightState.startTime = timestamp;
+            }
+
+            const elapsed = timestamp - flightState.startTime;
+            const totalDuration = (config.flightDistance / config.droneSpeed) * 3600000; // ms
+            const progress = Math.min(elapsed / totalDuration, 1);
+
+            // Calculate current position
+            const currentLat = flightState.startPos[0] + (flightState.endPos[0] - flightState.startPos[0]) * progress;
+            const currentLng = flightState.startPos[1] + (flightState.endPos[1] - flightState.startPos[1]) * progress;
+            const currentPos = [currentLat, currentLng];
+
+            // Update drone position
+            flightState.drone.setLatLng(currentPos);
+
+            // Update observers
+            updateObservers(currentPos);
+
+            // Continue animation
+            if (progress < 1) {
+                flightState.animationId = requestAnimationFrame(animateFlight);
+            }
+        }
+
+        function startFlight() {
+            // Clear existing flight
+            if (flightState.animationId) {
+                cancelAnimationFrame(flightState.animationId);
+            }
+            if (flightState.drone) {
+                map.removeLayer(flightState.drone);
+            }
+            flightState.observers.forEach(obs => {
+                map.removeLayer(obs.marker);
+                map.removeLayer(obs.line);
+            });
+
+            // Reset state
+            flightState.observers = [];
+            flightState.startTime = null;
+            flightState.lastSpawnDistance = 0;
+
+            // Set random flight path
+            const center = map.getCenter();
+            const angle = Math.random() * 2 * Math.PI;
+            const halfDist = config.flightDistance / 2;
+            
+            flightState.startPos = [
+                center.lat - (halfDist / 111) * Math.cos(angle),
+                center.lng - (halfDist / (111 * Math.cos(center.lat * Math.PI / 180))) * Math.sin(angle)
+            ];
+            flightState.endPos = [
+                center.lat + (halfDist / 111) * Math.cos(angle),
+                center.lng + (halfDist / (111 * Math.cos(center.lat * Math.PI / 180))) * Math.sin(angle)
+            ];
+
+            // Create drone
+            flightState.drone = L.circleMarker(flightState.startPos, {
+                radius: 8,
+                fillColor: '#ff0000',
+                color: '#000000',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9,
+                pane: 'markerPane',
+                zIndexOffset: 1000
+            }).addTo(map);
+
+            // Adjust map view
+            const bounds = L.latLngBounds([flightState.startPos, flightState.endPos]);
+            map.fitBounds(bounds, { padding: [50, 50] });
+
+            // Start animation
+            flightState.animationId = requestAnimationFrame(animateFlight);
+        }
+
+        // Control panel handlers
+        function updateControlValues() {
+            document.getElementById('speedDisplay').textContent = config.droneSpeed;
+            document.getElementById('distanceDisplay').textContent = config.flightDistance;
+            document.getElementById('minDistDisplay').textContent = config.minObserverDistance;
+            document.getElementById('maxDistDisplay').textContent = config.maxObserverDistance;
+            document.getElementById('spawnRateDisplay').textContent = config.observerSpawnRate.toFixed(0);
+            document.getElementById('minVisDisplay').textContent = config.minVisibility;
+            document.getElementById('maxVisDisplay').textContent = config.maxVisibility;
+        }
+
+        function toggleMenu() {
+            const controls = document.getElementById('controls');
+            const button = document.getElementById('toggleButton');
+            controls.classList.toggle('visible');
+            button.classList.toggle('active');
+        }
+
+        document.getElementById('droneSpeed').addEventListener('input', (e) => {
+            config.droneSpeed = parseInt(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('flightDistance').addEventListener('input', (e) => {
+            config.flightDistance = parseInt(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('minObserverDist').addEventListener('input', (e) => {
+            config.minObserverDistance = parseFloat(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('maxObserverDist').addEventListener('input', (e) => {
+            config.maxObserverDistance = parseFloat(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('observerSpawnRate').addEventListener('input', (e) => {
+            config.observerSpawnRate = parseInt(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('minVisibility').addEventListener('input', (e) => {
+            config.minVisibility = parseFloat(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('maxVisibility').addEventListener('input', (e) => {
+            config.maxVisibility = parseFloat(e.target.value);
+            updateControlValues();
+        });
+
+        document.getElementById('aimRandomness').addEventListener('change', (e) => {
+            config.aimRandomness = e.target.checked;
+        });
+
+        function restartFlight() {
+            startFlight();
+        }
+
+        // Initialize
+        updateControlValues();
+        startFlight();
+    </script>
+</body>
+</html>
