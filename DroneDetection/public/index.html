@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeGSiS Drone Detection</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e8ba3 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      background: white;
+      border-radius: 12px;
+      padding: 20px 40px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo {
+      max-height: 60px;
+      width: auto;
+    }
+
+    .title-group {
+      border-left: 3px solid #2a5298;
+      padding-left: 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      color: #1e3c72;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 1rem;
+      font-weight: 400;
+    }
+
+    .header-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Main Content */
+    .main-content {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 1024px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .card-icon {
+      font-size: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      color: #1e3c72;
+      font-weight: 600;
+    }
+
+    /* Status */
+    .status {
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.3s;
+    }
+
+    .status::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status.loading {
+      background: #fef3c7;
+      color: #92400e;
+      border-left: 4px solid #f59e0b;
+    }
+
+    .status.loading::before {
+      background: #f59e0b;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status.ready {
+      background: #d1fae5;
+      color: #065f46;
+      border-left: 4px solid #10b981;
+    }
+
+    .status.ready::before {
+      background: #10b981;
+    }
+
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border-left: 4px solid #ef4444;
+    }
+
+    .status.error::before {
+      background: #ef4444;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Upload Section */
+    .upload-section {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .upload-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(30, 60, 114, 0.3);
+    }
+
+    .upload-label:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(30, 60, 114, 0.4);
+    }
+
+    .upload-label:active {
+      transform: translateY(0);
+    }
+
+    #imageInput {
+      display: none;
+    }
+
+    /* Canvas Display */
+    .canvas-wrapper {
+      position: relative;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed #dee2e6;
+      transition: all 0.3s;
+    }
+
+    .canvas-wrapper.has-image {
+      border-color: #2a5298;
+      background: #fff;
+    }
+
+    #canvas {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .placeholder {
+      color: #adb5bd;
+      font-size: 1.2rem;
+      text-align: center;
+    }
+
+    .placeholder-icon {
+      font-size: 4rem;
+      margin-bottom: 10px;
+      opacity: 0.3;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      padding: 25px;
+      border-radius: 10px;
+      border-left: 4px solid #2a5298;
+      transition: all 0.3s;
+    }
+
+    .stat-card:hover {
+      transform: translateX(5px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2a5298;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stat-icon {
+      font-size: 1.5rem;
+    }
+
+    /* Info Panel */
+    .info-panel {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .info-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .info-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid #dee2e6;
+      color: #6c757d;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .info-list li:last-child {
+      border-bottom: none;
+    }
+
+    .info-list li::before {
+      content: '✓';
+      color: #10b981;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+
+    /* Detection Legend */
+    .legend {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .legend-title {
+      font-weight: 600;
+      margin-bottom: 15px;
+      color: #495057;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .color-box {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 2px solid rgba(0,0,0,0.1);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      color: white;
+      padding: 20px;
+      margin-top: 30px;
+      opacity: 0.9;
+      font-size: 0.9rem;
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      header {
+        padding: 20px;
+      }
+
+      .logo-section {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .title-group {
+        border-left: none;
+        border-top: 3px solid #2a5298;
+        padding-left: 0;
+        padding-top: 15px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .stat-value {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="logo-section">
+        <img src="NeGSiS_Logo.png" alt="NeGSiS Logo" class="logo">
+        <div class="title-group">
+          <h1>Drone Detection System</h1>
+          <p class="subtitle">AI-Powered Aerial Object Recognition</p>
+        </div>
+      </div>
+      <div class="header-badge">
+        🤖 YOLOv8 + ONNX Runtime
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <div class="main-content">
+      <!-- Left Column: Detection Area -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🎯</span>
+          <h2 class="card-title">Live Detection</h2>
+        </div>
+
+        <div id="status" class="status loading">
+          Initializing model...
+        </div>
+
+        <div class="upload-section">
+          <div class="upload-wrapper">
+            <label for="imageInput" class="upload-label">
+              📁 Upload Image
+            </label>
+            <input type="file" id="imageInput" accept="image/*" />
+          </div>
+        </div>
+
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <div class="placeholder" id="placeholder">
+            <div class="placeholder-icon">🚁</div>
+            <p>Upload an image to begin drone detection</p>
+          </div>
+          <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+
+        <div class="legend">
+          <div class="legend-title">Detection Classes</div>
+          <div class="legend-item">
+            <div class="color-box" style="background: #00ff00;"></div>
+            <span><strong>Drone</strong> - Multi-rotor UAVs and aerial vehicles</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Stats & Info -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📊</span>
+            <h2 class="card-title">Detection Statistics</h2>
+          </div>
+
+          <div class="stats-grid" id="statsGrid" style="display: none;">
+            <div class="stat-card">
+              <div class="stat-label">Detections</div>
+              <div class="stat-value">
+                <span class="stat-icon">🎯</span>
+                <span id="detectionCount">0</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Inference Time</div>
+              <div class="stat-value">
+                <span class="stat-icon">⚡</span>
+                <span id="inferenceTime">-</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Image Size</div>
+              <div class="stat-value">
+                <span class="stat-icon">📐</span>
+                <span id="imageSize">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-panel">
+            <div class="info-title">
+              ℹ️ System Information
+            </div>
+            <ul class="info-list">
+              <li>Real-time browser-based inference</li>
+              <li>No server uploads required</li>
+              <li>YOLOv8 neural network</li>
+              <li>ONNX Runtime Web execution</li>
+              <li>Optimized for speed & accuracy</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2025 NeGSiS - Next Generation Simulation Systems | Drone Detection Technology</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
